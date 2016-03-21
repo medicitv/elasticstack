@@ -20,9 +20,11 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+from django.conf import settings
 from haystack import connections
 from importlib import import_module
+
+from haystack.constants import DEFAULT_ALIAS
 
 
 def prepare_object(obj, using='default'):
@@ -81,3 +83,9 @@ def get_model(app_label, model_name):
             # This must be a different case (e.g. the model really doesn't
             # exist). We just re-raise the exception.
             raise
+
+
+def get_using(language, alias=DEFAULT_ALIAS):
+    new_using = "{}_{}".format(alias, language)
+    using = new_using if new_using in settings.HAYSTACK_CONNECTIONS else alias
+    return using
