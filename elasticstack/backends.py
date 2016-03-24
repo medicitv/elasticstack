@@ -24,11 +24,8 @@
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import translation
-from elasticstack.utils import get_using
-from haystack import connections
 from haystack.backends.elasticsearch_backend import \
         ElasticsearchSearchBackend, ElasticsearchSearchEngine, ElasticsearchSearchQuery
-from haystack.constants import DEFAULT_ALIAS
 
 
 class ConfigurableElasticBackend(ElasticsearchSearchBackend):
@@ -108,38 +105,24 @@ class ConfigurableElasticSearchEngine(ElasticsearchSearchEngine):
 
 
 class MultilingualElasticBackend(ConfigurableElasticBackend):
-    def update(self, index, iterable, commit=True, multilingual=True):
-        if multilingual:
-            initial_language = translation.get_language()[:2] if translation.get_language() else None
-            print 'multi'
-            # retrieve unique backend name
-            backends = []
-            for language, __ in settings.LANGUAGES:
-                using = get_using(language, alias=self.connection_alias)
-                # Ensure each backend is called only once
-                if using in backends:
-                    continue
-                else:
-                    backends.append(using)
-                print language
-                translation.activate(language)
-                backend = connections[using].get_backend()
-                backend.update(index, iterable, commit, multilingual=False)
-            if initial_language:
-                translation.activate(initial_language)
-            else:
-                translation.deactivate()
+    def __init__(self, connection_alias, **connection_options):
+        super(MultilingualElasticBackend, self).__init__(connection_alias, **connection_options)
+        self.lang = connection_options.get('LANG')
+        if not self.lang:
+            raise ImproperlyConfigured('Parameter "LANG" must be set for this backend')
+
+    def update(self, index, iterable, commit=True):
+        initial_language = translation.get_language()
+
+        translation.activate(self.lang)
+
+        super(MultilingualElasticBackend, self).update(index, iterable, commit)
+
+        if initial_language:
+            translation.activate(initial_language)
         else:
-            super(MultilingualElasticBackend, self).update(index, iterable, commit)
-
-
-class MultilingualElasticSearchQuery(ElasticsearchSearchQuery):
-    def __init__(self, using=DEFAULT_ALIAS):
-        language = translation.get_language()[:2]
-        using = get_using(language, using)
-        super(MultilingualElasticSearchQuery, self).__init__(using)
+            translation.deactivate()
 
 
 class MultilingualElasticSearchEngine(ElasticsearchSearchEngine):
     backend = MultilingualElasticBackend
-    query = MultilingualElasticSearchQuery
